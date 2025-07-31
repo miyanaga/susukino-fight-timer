@@ -22,15 +22,15 @@ declare global {
 function App() {
   const [workTime, setWorkTime] = useState(() => {
     const saved = localStorage.getItem('workTime')
-    return saved ? parseInt(saved) : 5
+    return saved ? parseInt(saved) : 180 // 3 minutes default
   })
   const [restTime, setRestTime] = useState(() => {
     const saved = localStorage.getItem('restTime')
-    return saved ? parseInt(saved) : 5
+    return saved ? parseInt(saved) : 60 // 1 minute default
   })
   const [currentTime, setCurrentTime] = useState(() => {
     const saved = localStorage.getItem('workTime')
-    return saved ? parseInt(saved) : 5
+    return saved ? parseInt(saved) : 180
   })
   const [timerMode, setTimerMode] = useState<TimerMode>('work')
   const [timerState, setTimerState] = useState<TimerState>('idle')
@@ -38,6 +38,7 @@ function App() {
   const [voicePermission, setVoicePermission] = useState(false)
   const [recognizedText, setRecognizedText] = useState('')
   const [isPortrait, setIsPortrait] = useState(window.innerHeight > window.innerWidth)
+  const [isFullscreen, setIsFullscreen] = useState(false)
   
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const wakeLockRef = useRef<any>(null)
@@ -51,10 +52,16 @@ function App() {
       setIsPortrait(window.innerHeight > window.innerWidth)
     }
     
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement)
+    }
+    
     window.addEventListener('resize', handleResize)
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
     
     return () => {
       window.removeEventListener('resize', handleResize)
+      document.removeEventListener('fullscreenchange', handleFullscreenChange)
       if (wakeLockRef.current) {
         wakeLockRef.current.release()
       }
@@ -69,10 +76,10 @@ function App() {
             playSound()
             if (timerMode === 'work') {
               setTimerMode('rest')
-              return restTime
+              return restTime === 0 ? 5 : restTime
             } else {
               setTimerMode('work')
-              return workTime
+              return workTime === 0 ? 5 : workTime
             }
           }
           return prev - 1
@@ -176,6 +183,10 @@ function App() {
       initSpeechRecognition()
       // Play sound after setting permission
       setTimeout(() => playSound(), 100)
+      // Set initial time if 0
+      if (workTime === 0) {
+        setCurrentTime(5)
+      }
     }
     
     if (timerState === 'running') {
@@ -198,7 +209,7 @@ function App() {
   const handleReset = () => {
     setTimerState('idle')
     setTimerMode('work')
-    setCurrentTime(workTime)
+    setCurrentTime(workTime === 0 ? 5 : workTime)
     setRecognizedText('')
     
     if (recognitionRef.current) {
@@ -207,20 +218,24 @@ function App() {
   }
 
   const adjustWorkTime = (delta: number) => {
-    const newTime = Math.max(5, workTime + delta)
+    // Round current time to nearest 30 seconds first
+    const roundedCurrent = Math.round(workTime / 30) * 30
+    const newTime = Math.max(0, roundedCurrent + delta)
     setWorkTime(newTime)
     localStorage.setItem('workTime', newTime.toString())
     if (timerState === 'idle' && timerMode === 'work') {
-      setCurrentTime(newTime)
+      setCurrentTime(newTime === 0 ? 5 : newTime)
     }
   }
 
   const adjustRestTime = (delta: number) => {
-    const newTime = Math.max(5, restTime + delta)
+    // Round current time to nearest 30 seconds first
+    const roundedCurrent = Math.round(restTime / 30) * 30
+    const newTime = Math.max(0, roundedCurrent + delta)
     setRestTime(newTime)
     localStorage.setItem('restTime', newTime.toString())
     if (timerState === 'idle' && timerMode === 'rest') {
-      setCurrentTime(newTime)
+      setCurrentTime(newTime === 0 ? 5 : newTime)
     }
   }
 
@@ -230,8 +245,31 @@ function App() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
   }
 
+  const toggleFullscreen = async () => {
+    if (!document.fullscreenElement) {
+      try {
+        await document.documentElement.requestFullscreen()
+      } catch (err) {
+        console.error('Failed to enter fullscreen:', err)
+      }
+    } else {
+      try {
+        await document.exitFullscreen()
+      } catch (err) {
+        console.error('Failed to exit fullscreen:', err)
+      }
+    }
+  }
+
   return (
     <div className={`app ${isPortrait ? 'portrait' : 'landscape'}`}>
+      <button 
+        onClick={toggleFullscreen} 
+        className="fullscreen-button"
+        aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+      >
+        {isFullscreen ? '⛶' : '⛶'}
+      </button>
       {isPortrait ? (
         <>
           <img src="/logo.png" alt="Logo" className="logo" />
@@ -250,17 +288,17 @@ function App() {
             <div className="setting-item">
               <span>Work Time</span>
               <div className="setting-controls">
-                <button onClick={() => adjustWorkTime(-5)}>-</button>
-                <span>{workTime}s</span>
-                <button onClick={() => adjustWorkTime(5)}>+</button>
+                <button onClick={() => adjustWorkTime(-30)}>-</button>
+                <span>{formatTime(workTime)}</span>
+                <button onClick={() => adjustWorkTime(30)}>+</button>
               </div>
             </div>
             <div className="setting-item">
               <span>Rest Time</span>
               <div className="setting-controls">
-                <button onClick={() => adjustRestTime(-5)}>-</button>
-                <span>{restTime}s</span>
-                <button onClick={() => adjustRestTime(5)}>+</button>
+                <button onClick={() => adjustRestTime(-30)}>-</button>
+                <span>{formatTime(restTime)}</span>
+                <button onClick={() => adjustRestTime(30)}>+</button>
               </div>
             </div>
           </div>
@@ -289,17 +327,17 @@ function App() {
               <div className="setting-item">
                 <span>Work Time</span>
                 <div className="setting-controls">
-                  <button onClick={() => adjustWorkTime(-5)}>-</button>
-                  <span>{workTime}s</span>
-                  <button onClick={() => adjustWorkTime(5)}>+</button>
+                  <button onClick={() => adjustWorkTime(-30)}>-</button>
+                  <span>{formatTime(workTime)}</span>
+                  <button onClick={() => adjustWorkTime(30)}>+</button>
                 </div>
               </div>
               <div className="setting-item">
                 <span>Rest Time</span>
                 <div className="setting-controls">
-                  <button onClick={() => adjustRestTime(-5)}>-</button>
-                  <span>{restTime}s</span>
-                  <button onClick={() => adjustRestTime(5)}>+</button>
+                  <button onClick={() => adjustRestTime(-30)}>-</button>
+                  <span>{formatTime(restTime)}</span>
+                  <button onClick={() => adjustRestTime(30)}>+</button>
                 </div>
               </div>
             </div>

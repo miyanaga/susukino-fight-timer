@@ -8,6 +8,33 @@
   padding: 20px;
   box-sizing: border-box;
   overflow: hidden;
+  position: relative;
+}
+
+.fullscreen-button {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  background-color: #e0e0e0;
+  border: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  font-size: 20px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fullscreen-button:hover {
+  background-color: #d0d0d0;
+}
+
+.fullscreen-button:active {
+  background-color: #c0c0c0;
 }
 
 .app.portrait {
