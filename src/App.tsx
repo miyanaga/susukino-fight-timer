@@ -36,6 +36,10 @@ function App() {
   const [timerState, setTimerState] = useState<TimerState>('idle')
   const [soundPermission, setSoundPermission] = useState(false)
   const [voicePermission, setVoicePermission] = useState(false)
+  const [voiceCommandEnabled, setVoiceCommandEnabled] = useState(() => {
+    const saved = localStorage.getItem('voiceCommandEnabled')
+    return saved === 'true'
+  })
   const [recognizedText, setRecognizedText] = useState('')
   const [isPortrait, setIsPortrait] = useState(window.innerHeight > window.innerWidth)
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -100,21 +104,23 @@ function App() {
 
   // Voice command handler
   useEffect(() => {
-    if (recognizedText.includes('ファイトスタート')) {
-      if (timerState !== 'running') {
-        handleStart()
+    if (voiceCommandEnabled && recognizedText) {
+      if (recognizedText.includes('ファイトスタート')) {
+        if (timerState !== 'running') {
+          handleStart()
+        }
+      } else if (recognizedText.includes('ファイトポーズ')) {
+        if (timerState === 'running') {
+          handleStart() // This toggles to pause
+        }
+      } else if (recognizedText.includes('ファイトリセット')) {
+        handleReset()
       }
-    } else if (recognizedText.includes('ファイトポーズ')) {
-      if (timerState === 'running') {
-        handleStart() // This toggles to pause
-      }
-    } else if (recognizedText.includes('ファイトリセット')) {
-      handleReset()
     }
-  }, [recognizedText])
+  }, [recognizedText, voiceCommandEnabled])
 
   const playSound = async () => {
-    if (audioRef.current && soundPermission) {
+    if (audioRef.current) {
       try {
         // Stop current playback and reset
         audioRef.current.pause()
@@ -180,13 +186,15 @@ function App() {
       // First time start
       setSoundPermission(true)
       await requestWakeLock()
-      initSpeechRecognition()
-      // Play sound after setting permission
-      setTimeout(() => playSound(), 100)
+      if (voiceCommandEnabled) {
+        initSpeechRecognition()
+      }
       // Set initial time if 0
       if (workTime === 0) {
         setCurrentTime(5)
       }
+      // Play sound immediately
+      await playSound()
     }
     
     if (timerState === 'running') {
@@ -261,6 +269,19 @@ function App() {
     }
   }
 
+  const toggleVoiceCommand = () => {
+    const newValue = !voiceCommandEnabled
+    setVoiceCommandEnabled(newValue)
+    localStorage.setItem('voiceCommandEnabled', newValue.toString())
+    
+    // Stop recognition if disabling
+    if (!newValue && recognitionRef.current) {
+      recognitionRef.current.stop()
+      setVoicePermission(false)
+      setRecognizedText('')
+    }
+  }
+
   return (
     <div className={`app ${isPortrait ? 'portrait' : 'landscape'}`}>
       <button 
@@ -303,8 +324,16 @@ function App() {
             </div>
           </div>
           <div className="permissions">
+            <button 
+              onClick={toggleVoiceCommand} 
+              className={`voice-toggle ${voiceCommandEnabled ? 'active' : ''}`}
+            >
+              {voiceCommandEnabled ? 'VOICE ON' : 'VOICE OFF'}
+            </button>
             <div className={`permission ${soundPermission ? 'active' : ''}`}>SOUND</div>
-            <div className={`permission ${voicePermission ? 'active' : ''}`}>VOICE</div>
+            {voiceCommandEnabled && (
+              <div className={`permission ${voicePermission ? 'active' : ''}`}>VOICE</div>
+            )}
           </div>
           <div className="speech-result">{recognizedText}</div>
         </>
@@ -342,8 +371,16 @@ function App() {
               </div>
             </div>
             <div className="permissions">
+              <button 
+                onClick={toggleVoiceCommand} 
+                className={`voice-toggle ${voiceCommandEnabled ? 'active' : ''}`}
+              >
+                {voiceCommandEnabled ? 'VOICE ON' : 'VOICE OFF'}
+              </button>
               <div className={`permission ${soundPermission ? 'active' : ''}`}>SOUND</div>
-              <div className={`permission ${voicePermission ? 'active' : ''}`}>VOICE</div>
+              {voiceCommandEnabled && (
+                <div className={`permission ${voicePermission ? 'active' : ''}`}>VOICE</div>
+              )}
             </div>
             <div className="speech-result">{recognizedText}</div>
           </div>
